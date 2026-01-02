@@ -82,4 +82,135 @@
         .stars, .stars2, .stars3 {
             background: transparent;
             position: absolute;
-            top: 0px
+            top: 0px; left: 0px;
+            /* Tạo hàng trăm ngôi sao bằng box-shadow */
+            box-shadow: 
+                10vw 20vh #fff, 30vw 80vh #fff, 80vw 10vh #fff, 90vw 50vh #fff,
+                50vw 30vh #fff, 20vw 90vh #fff, 70vw 70vh #fff, 40vw 40vh #fff,
+                15vw 15vh #fff, 85vw 85vh #fff, 5vw 60vh #fff, 60vw 5vh #fff;
+            animation-name: flyUp;
+            animation-timing-function: linear;
+            animation-iteration-count: infinite;
+        }
+
+        /* Lớp sao nhỏ, chậm */
+        .stars {
+            width: 1px; height: 1px;
+            animation-duration: 100s;
+            opacity: 0.5;
+        }
+        /* Lớp sao vừa, tốc độ trung bình */
+        .stars2 {
+            width: 2px; height: 2px;
+            animation-duration: 70s;
+            box-shadow: 
+                15vw 25vh #fff, 35vw 85vh #fff, 85vw 15vh #fff, 95vw 55vh #fff,
+                55vw 35vh #fff, 25vw 95vh #fff, 75vw 75vh #fff, 45vw 45vh #fff;
+            opacity: 0.7;
+        }
+        /* Lớp sao lớn, nhanh hơn */
+        .stars3 {
+            width: 3px; height: 3px;
+            animation-duration: 50s;
+            box-shadow: 10vw 90vh #fff, 90vw 10vh #fff, 50vw 50vh #fff;
+            opacity: 0.9;
+        }
+
+        @keyframes flyUp {
+            from { transform: translateY(0px); }
+            to { transform: translateY(-100vh); } /* Sao bay lên trên */
+        }
+
+
+        /* === CÁC THÀNH PHẦN GIAO DIỆN CŨ === */
+
+        .neon-title {
+            font-family: 'Arial Black', 'Arial Bold', Gadget, sans-serif;
+            font-size: 3.5em;
+            text-transform: uppercase;
+            color: #fff;
+            text-align: center;
+            margin-bottom: 30px;
+            /* Tăng độ sáng của Neon để nổi trên nền tối */
+            text-shadow: 
+                0 0 5px #fff, 0 0 10px #fff,
+                0 0 20px #ff00de, 0 0 30px #ff00de,
+                0 0 40px #ff00de, 0 0 60px #ff00de;
+            letter-spacing: 2px;
+            position: relative; z-index: 2;
+        }
+
+        .app-card {
+            background: rgba(255, 255, 255, 0.9); /* Làm mờ nhẹ nền thẻ để thấy galaxy */
+            border-radius: 22px;
+            width: 90%; /* Responsive hơn trên mobile */
+            max-width: 380px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.3); /* Bóng đổ sâu hơn */
+            transition: transform 0.2s;
+            position: relative; z-index: 2;
+            backdrop-filter: blur(5px); /* Hiệu ứng kính mờ hiện đại */
+        }
+        .app-card:hover { transform: translateY(-5px); }
+
+        .app-info { display: flex; align-items: center; }
+
+        .app-icon {
+            width: 65px; height: 65px;
+            border-radius: 16px;
+            margin-right: 15px;
+            background: linear-gradient(135deg, #ff9933, #ff6600);
+            display: flex;
+            justify-content: center; align-items: center;
+            color: white; font-weight: bold; font-size: 13px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(255, 102, 0, 0.5);
+        }
+
+        .app-details h3 { margin: 0; font-size: 1.2em; color: #1e1e1e; letter-spacing: -0.5px; }
+        .app-details p { margin: 3px 0; font-size: 0.9em; color: #444; }
+        .rating { color: #ffc107; font-size: 0.85em; }
+
+        .btn-get {
+            background: #ff5c5c;
+            color: white;
+            text-decoration: none;
+            padding: 10px 22px;
+            border-radius: 25px;
+            font-weight: 700;
+            font-size: 0.9em;
+            box-shadow: 0 4px 15px rgba(255, 92, 92, 0.4);
+            transition: 0.2s;
+        }
+        .btn-get:hover { background: #e54a4a; transform: scale(1.05); box-shadow: 0 6px 20px rgba(255, 92, 92, 0.6); }
+
+    </style>
+</head>
+<body>
+
+    <div class="galaxy-bg"></div> <div class="nebula-layer"></div> <div class="stars-wrapper"> <div class="stars"></div>
+        <div class="stars2"></div>
+        <div class="stars3"></div>
+    </div>
+    <h1 class="neon-title">TENMARIO</h1>
+
+    <div class="app-card">
+        <div class="app-info">
+            <div class="app-icon">TEN<br>MARIO</div>
+            <div class="app-details">
+                <h3>TENMARIO V2</h3>
+                <p>999+M Downloads</p>
+                <div class="rating">★★★★★</div>
+            </div>
+        </div>
+
+        <a href="itms-services://?action=download-manifest&url=LINK_PLIST_CUA_BAN" class="btn-get">
+            GET
+        </a>
+    </div>
+
+</body>
+</html>
