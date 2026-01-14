@@ -1,35 +1,733 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <title>Glowing Animated Login Form | CONGTHANHIOS</title>
-  <link rel="stylesheet" href="./style.css">
-</head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Câu Cá Vạn Cân (Ten Thousand Pound Fishing)</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #000; touch-action: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; -webkit-user-select: none; }
+        canvas { display: block; width: 100%; height: 100%; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        .interactive { pointer-events: auto; }
+        
+        /* Mobile Controls */
+        #mobile-controls { display: none; position: absolute; bottom: 20px; width: 100%; justify-content: space-around; pointer-events: auto; }
+        .btn { width: 70px; height: 70px; border-radius: 50%; background: rgba(255,255,255,0.2); border: 2px solid white; color: white; font-weight: bold; font-size: 12px; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px); touch-action: manipulation; text-align: center; }
+        .btn:active { background: rgba(255,255,255,0.5); transform: scale(0.95); }
+        .btn.red { border-color: #ff4444; background: rgba(255,68,68,0.2); }
+        .btn.green { border-color: #44ff44; background: rgba(68,255,68,0.2); }
+        .btn.blue { border-color: #4444ff; background: rgba(68,68,255,0.2); }
+        .btn.skill { border-color: #ffaa00; background: rgba(255,170,0,0.2); width: 60px; height: 60px; }
+        
+        #skill-controls { display: none; position: absolute; bottom: 120px; right: 20px; gap: 10px; pointer-events: auto; }
 
+        @media (max-width: 768px) { 
+            #mobile-controls { display: flex; } 
+            #skill-controls { display: flex; flex-direction: column; }
+        }
+    </style>
+</head>
 <body>
 
-  <div class="container">
-    <div class="box">
-      <div class="inner-box">
-        <div class="form">
-          <h2>
-            Login
-          </h2>
-          <input type="text" placeholder="Username">
-          <input type="password" placeholder="Password">
-          <input type="submit" value="Sign in" />
-          <div class="btns">
-            <a href="#">Forgot Password?</a>
-            <span>
-              Don't have an account?<a href="#">Sign up</a>
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+<canvas id="gameCanvas"></canvas>
 
+<!-- Mobile Main Controls -->
+<div id="mobile-controls">
+    <div id="btn-ease" class="btn red">EASE<br>(Nhả)</div>
+    <div id="btn-pump" class="btn blue">PUMP<br>(Giật)</div>
+    <div id="btn-reel" class="btn green">REEL<br>(Kéo)</div>
+</div>
+
+<!-- Mobile Skill Controls -->
+<div id="skill-controls">
+    <div id="btn-skill1" class="btn skill">SKILL 1<br>Choáng</div>
+    <div id="btn-skill2" class="btn skill">SKILL 2<br>Gồng</div>
+    <div id="btn-skill3" class="btn skill" style="border-color: #ff00ff; background: rgba(255,0,255,0.2);">SKILL 3<br>Bạo Kích</div>
+</div>
+
+<script>
+(function() { // START IIFE
+/**
+ * ==========================================================================================
+ * CÂU CÁ VẠN CÂN - UPDATED VERSION
+ * 5 Stages, Boss Win Condition, Active Skills (Added Skill 3: High Damage)
+ * ==========================================================================================
+ */
+
+const M = Math;
+const Rand = (min, max) => M.random() * (max - min) + min;
+const Clamp = (val, min, max) => M.max(min, M.min(max, val));
+const Lerp = (a, b, t) => a + (b - a) * t;
+const Dist = (x1, y1, x2, y2) => M.hypot(x2 - x1, y2 - y1);
+const V2 = (x, y) => ({x, y});
+
+// --- GAME CONFIG DATA ---
+const STAGES = [
+    {
+        id: 0, name: "HỒ LÀNG", bossName: "CÁ CHÉP VÀNG",
+        colors: { skyTop:'#4facfe', skyBot:'#00f2fe', waterTop:'#0ba360', waterBot:'#3cba92' },
+        difficulty: 1.0, bossWeight: 50, bossStamina: 300,
+        env: { wind: 0.2, current: 0.1 }
+    },
+    {
+        id: 1, name: "SÔNG RỘNG", bossName: "TRÊ KHỔNG LỒ",
+        colors: { skyTop:'#89f7fe', skyBot:'#66a6ff', waterTop:'#243949', waterBot:'#517fa4' },
+        difficulty: 1.2, bossWeight: 120, bossStamina: 500,
+        env: { wind: 0.5, current: 0.8 } // Dòng chảy mạnh
+    },
+    {
+        id: 2, name: "ĐẦM LẦY", bossName: "CÁ SẤU CỔ",
+        colors: { skyTop:'#200122', skyBot:'#6f0000', waterTop:'#185a9d', waterBot:'#43cea2' },
+        difficulty: 1.5, bossWeight: 300, bossStamina: 800,
+        env: { wind: 0.1, current: 0.2, snag: 0.3 } // Cỏ nước
+    },
+    {
+        id: 3, name: "BIỂN KHƠI", bossName: "NGỪ VÂY XANH",
+        colors: { skyTop:'#3a1c71', skyBot:'#d76d77', waterTop:'#1a2a6c', waterBot:'#b21f1f' },
+        difficulty: 2.0, bossWeight: 800, bossStamina: 1200,
+        env: { wind: 1.2, current: 1.0 } // Gió mạnh
+    },
+    {
+        id: 4, name: "VỰC THẲM", bossName: "CÁ CHÀ BẶC",
+        colors: { skyTop:'#000000', skyBot:'#0f2027', waterTop:'#000000', waterBot:'#2c3e50' },
+        difficulty: 3.0, bossWeight: 10000, bossStamina: 2500,
+        env: { wind: 0.5, current: 0.5 } // Bí ẩn
+    }
+];
+
+const SKILLS = [
+    { id: 1, name: "CHOÁNG (1)", cd: 15, duration: 3, color: '#ffff00', desc: "Cá đứng yên 3s" },
+    { id: 2, name: "GỒNG (2)", cd: 20, duration: 3, color: '#ff4400', desc: "Dây bất tử 3s" },
+    { id: 3, name: "BẠO KÍCH (3)", cd: 30, duration: 0, color: '#ff00ff', desc: "Sát thương khủng" }
+];
+
+const CFG = {
+    rodBase: { x: 0.5, y: 0.85 },
+    maxLineLen: 600,
+    tensionRecover: 15,
+    colors: { lineSafe: '#fff', lineWarn: '#ff0', lineDanger: '#f00' }
+};
+
+// --- AUDIO SYSTEM ---
+class AudioSys {
+    constructor() { this.ctx = null; this.inited = false; }
+    init() {
+        if(this.inited) return;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AC();
+        this.inited = true;
+    }
+    tone(freq, type, dur, vol=0.1) {
+        if(!this.ctx) return;
+        const o = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        o.type = type; o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        g.gain.setValueAtTime(vol, this.ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + dur);
+        o.connect(g); g.connect(this.ctx.destination);
+        o.start(); o.stop(this.ctx.currentTime + dur);
+    }
+    noise(dur, vol=0.2) {
+        if(!this.ctx) return;
+        const bs = this.ctx.sampleRate * dur;
+        const b = this.ctx.createBuffer(1, bs, this.ctx.sampleRate);
+        const d = b.getChannelData(0);
+        for(let i=0; i<bs; i++) d[i] = M.random()*2-1;
+        const s = this.ctx.createBufferSource(); s.buffer = b;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(vol, this.ctx.currentTime);
+        g.gain.linearRampToValueAtTime(0, this.ctx.currentTime + dur);
+        s.connect(g); g.connect(this.ctx.destination); s.start();
+    }
+    sfxUI() { this.tone(800, 'sine', 0.1, 0.1); }
+    sfxCast() { this.tone(400, 'triangle', 0.3, 0.2); this.noise(0.2, 0.1); }
+    sfxReel() { this.tone(150, 'sawtooth', 0.05, 0.03); }
+    sfxSkill() { this.tone(600, 'square', 0.2, 0.1); this.tone(900, 'square', 0.4, 0.1); }
+    sfxExplosion() { this.tone(100, 'sawtooth', 0.4, 0.3); this.noise(0.4, 0.5); }
+    sfxWin() { this.tone(400, 'sine', 0.2); setTimeout(()=>this.tone(600,'sine',0.2),200); setTimeout(()=>this.tone(800,'sine',0.4),400); }
+    sfxBreak() { this.tone(100, 'sawtooth', 0.5, 0.5); this.noise(0.5, 0.3); }
+}
+const Audio = new AudioSys();
+
+// --- INPUT ---
+const Input = {
+    keys: {}, mouse: {x:0, y:0, down:false, right:false},
+    reel: false, ease: false, pump: false, skill1: false, skill2: false, skill3: false, dir: 0,
+    init() {
+        window.onkeydown = e => { 
+            this.keys[e.code] = true; 
+            if(e.code==='Space') this.pump=true; 
+            if(e.key==='1') this.skill1=true;
+            if(e.key==='2') this.skill2=true;
+            if(e.key==='3') this.skill3=true;
+            if(e.code==='Escape') Game.state = 0; // Back to menu
+        };
+        window.onkeyup = e => { 
+            this.keys[e.code] = false; 
+            if(e.code==='Space') this.pump=false; 
+            if(e.key==='1') this.skill1=false;
+            if(e.key==='2') this.skill2=false;
+            if(e.key==='3') this.skill3=false;
+        };
+
+        // GỘP SỰ KIỆN CLICK MENU VÀ INPUT VÀO MỘT ĐỂ TRÁNH XUNG ĐỘT
+        window.onmousedown = e => { 
+            Audio.init();
+            handleClick(e.clientX, e.clientY); // Xử lý UI trước
+            if(e.button===0) {this.mouse.down=true; this.reel=true;} 
+            if(e.button===2) {this.mouse.right=true; this.ease=true;} 
+        };
+        window.onmouseup = e => { if(e.button===0) {this.mouse.down=false; this.reel=false;} if(e.button===2) {this.mouse.right=false; this.ease=false;} };
+        window.onmousemove = e => { const r = cvs.getBoundingClientRect(); this.mouse.x = e.clientX-r.left; this.mouse.y = e.clientY-r.top; };
+        window.oncontextmenu = e => e.preventDefault();
+        
+        const touch = (id, k) => {
+            const el = document.getElementById(id);
+            if(el) { el.ontouchstart=e=>{e.preventDefault(); Audio.init(); this[k]=true;}; el.ontouchend=e=>{e.preventDefault(); this[k]=false;}; }
+        };
+        touch('btn-reel','reel'); touch('btn-ease','ease'); touch('btn-pump','pump');
+        touch('btn-skill1','skill1'); touch('btn-skill2','skill2'); touch('btn-skill3','skill3');
+        
+        let tx=0; 
+        window.ontouchstart = e => {
+            Audio.init();
+            handleClick(e.touches[0].clientX, e.touches[0].clientY); // Xử lý UI trước
+            tx=e.touches[0].clientX;
+        };
+        window.ontouchmove=e=>{ const d=e.touches[0].clientX-tx; this.dir=d>20?1:(d<-20?-1:0); };
+        window.ontouchend=()=>this.dir=0;
+    },
+    update() {
+        if(this.keys['ShiftLeft']) this.ease=true; else if(!this.mouse.right) this.ease=false;
+        this.dir = (this.keys['KeyA']||this.keys['ArrowLeft']) ? -1 : ((this.keys['KeyD']||this.keys['ArrowRight']) ? 1 : 0);
+    }
+};
+
+// --- PARTICLES ---
+class Particle {
+    spawn(x, y, type) { this.x=x; this.y=y; this.type=type; this.vx=Rand(-2,2); this.vy=Rand(-2,-5); this.life=1; this.active=true; }
+    update(dt) { if(!this.active)return; this.x+=this.vx; this.y+=this.vy; this.life-=dt; if(this.type===0)this.vy+=0.2; if(this.life<=0)this.active=false; }
+    draw(ctx) { if(!this.active)return; ctx.globalAlpha=this.life; ctx.fillStyle=this.type===2?'#fa0':'#fff'; ctx.beginPath(); ctx.arc(this.x,this.y,Rand(2,5),0,M.PI*2); ctx.fill(); ctx.globalAlpha=1; }
+}
+const Particles = { pool:Array(50).fill().map(()=>new Particle()), spawn(x,y,t){const p=this.pool.find(i=>!i.active); if(p)p.spawn(x,y,t);}, update(dt){this.pool.forEach(p=>p.update(dt));}, draw(ctx){this.pool.forEach(p=>p.draw(ctx));} };
+
+// --- GAME LOGIC ---
+const State = { MENU:0, IDLE:1, CASTING:2, WAITING:3, FIGHTING:4, REWARD:5, UPGRADE:6, GAMEOVER:7, VICTORY:8 };
+
+class GameEngine {
+    constructor() {
+        this.state = State.MENU;
+        this.stageIdx = 0;
+        this.resetGlobal();
+    }
+    
+    resetGlobal() {
+        this.score = 0;
+        this.stats = { maxTension: 100, reelPower: 1, rodDmg: 20, biteRate: 1 };
+        this.rod = { tip: V2(0,0), angle: 0, lineLen: 50, tension: 0 };
+        this.hook = V2(0,0);
+        this.fish = { active: false, pos: V2(0,0), stamina: 100, maxStamina: 100, weight: 10, isBoss: false };
+        this.skills = SKILLS.map(s => ({...s, curCd: 0, activeTimer: 0}));
+        this.shake = 0;
+        this.bossProgress = 0; // 0 to 100
+    }
+
+    startStage(idx) {
+        this.stageIdx = idx;
+        this.stageData = STAGES[idx];
+        this.resetGlobal();
+        this.state = State.IDLE;
+        this.lives = 3;
+        this.combo = 0;
+        // Apply Stage Difficulty
+        this.stats.rodDmg = 20 + idx * 5;
+        this.stats.maxTension = 100 + idx * 10;
+        this.bossSpawned = false;
+        Audio.sfxUI();
+    }
+
+    update(dt) {
+        Input.update();
+        Particles.update(dt);
+        if(this.shake>0) this.shake*=0.9;
+
+        // Skills Update
+        this.skills.forEach(s => {
+            if(s.activeTimer > 0) s.activeTimer -= dt;
+            if(s.curCd > 0) s.curCd -= dt;
+        });
+
+        // Rod Movement
+        if([State.IDLE, State.WAITING, State.FIGHTING].includes(this.state)) {
+            this.rod.angle = Clamp(this.rod.angle + Input.dir * 2 * dt, -0.8, 0.8);
+            const base = {x:cw*CFG.rodBase.x, y:ch*CFG.rodBase.y};
+            const len = ch*0.15;
+            this.rod.tip.x = base.x + M.sin(this.rod.angle)*len;
+            this.rod.tip.y = base.y - M.cos(this.rod.angle)*len;
+        }
+
+        switch(this.state) {
+            case State.MENU: this.updateMenu(); break;
+            case State.IDLE: 
+                this.hook.x = this.rod.tip.x; this.hook.y = this.rod.tip.y + 20;
+                if(Input.reel || Input.keys['Space']) { this.state=State.CASTING; this.castP=0; this.castD=1; Audio.sfxCast(); }
+                break;
+            case State.CASTING:
+                this.castP += this.castD * dt * 2;
+                if(this.castP>1){this.castP=1;this.castD=-1;} if(this.castP<0){this.castP=0;this.castD=1;}
+                if(!Input.reel && !Input.keys['Space']) {
+                    this.state = State.WAITING;
+                    this.rod.lineLen = 100 + this.castP * 300;
+                    this.hook.x = this.rod.tip.x + M.sin(this.rod.angle)*this.rod.lineLen;
+                    this.hook.y = M.min(ch*0.8, this.rod.tip.y + M.cos(this.rod.angle)*this.rod.lineLen+50);
+                    Particles.spawn(this.hook.x, this.hook.y, 0);
+                    this.biteT = Rand(2, 4) / this.stats.biteRate;
+                }
+                break;
+            case State.WAITING:
+                this.hook.y += M.sin(Date.now()*0.005)*0.5;
+                this.biteT -= dt;
+                if(Input.reel) { // Cancel
+                    this.state = State.IDLE; 
+                }
+                if(this.biteT <= 0) this.hookFish();
+                break;
+            case State.FIGHTING: this.updateFighting(dt); break;
+        }
+    }
+
+    updateMenu() {
+        // Menu Click Logic is handled in global click handler
+    }
+
+    hookFish() {
+        Audio.sfxWin();
+        this.state = State.FIGHTING;
+        this.rod.tension = 20;
+        
+        // Spawn Logic
+        let isBoss = false;
+        if(this.bossProgress >= 100 && !this.bossSpawned) {
+            isBoss = true;
+            this.bossSpawned = true;
+        }
+
+        const f = this.fish;
+        f.active = true;
+        f.pos = V2(this.hook.x, this.hook.y);
+        f.isBoss = isBoss;
+        
+        // Stats based on Stage Difficulty
+        const diff = this.stageData.difficulty;
+        if(isBoss) {
+            f.weight = this.stageData.bossWeight;
+            f.maxStamina = this.stageData.bossStamina;
+            f.baseSpeed = 3 * diff;
+        } else {
+            const rarity = Rand(0, 10) > 8 ? 2 : 0;
+            f.weight = (rarity+1) * 10 * diff;
+            f.maxStamina = (rarity+1) * 60 * diff;
+            f.baseSpeed = (1 + rarity*0.5) * diff;
+        }
+        f.stamina = f.maxStamina;
+        f.burstT = 0; f.isBurst = false;
+        f.stunned = false;
+        this.shake = 5;
+    }
+
+    updateFighting(dt) {
+        const f = this.fish;
+        const d = this.stageData;
+        
+        // Skill Inputs
+        if(Input.skill1 && this.skills[0].curCd <= 0) { 
+            this.skills[0].activeTimer = this.skills[0].duration; 
+            this.skills[0].curCd = this.skills[0].cd; 
+            Audio.sfxSkill(); 
+            Particles.spawn(f.pos.x, f.pos.y, 2);
+        }
+        if(Input.skill2 && this.skills[1].curCd <= 0) { 
+            this.skills[1].activeTimer = this.skills[1].duration; 
+            this.skills[1].curCd = this.skills[1].cd; 
+            Audio.sfxSkill(); 
+        }
+        if(Input.skill3 && this.skills[2].curCd <= 0) { 
+            this.skills[2].curCd = this.skills[2].cd; 
+            Audio.sfxExplosion(); // High dmg sound
+            f.stamina -= this.stats.rodDmg * 10; // Massive Damage
+            Particles.spawn(f.pos.x, f.pos.y, 2);
+            this.shake = 10;
+        }
+
+        const isStunned = this.skills[0].activeTimer > 0;
+        const isIronLine = this.skills[1].activeTimer > 0;
+
+        // Fish Movement
+        if(!isStunned) {
+            // Fish Behavior
+            let moveSpd = f.baseSpeed;
+            if(f.isBurst) {
+                moveSpd *= 2.5;
+                f.burstT -= dt;
+                if(f.burstT <= 0) f.isBurst = false;
+                Particles.spawn(f.pos.x, f.pos.y, 1);
+            } else {
+                f.burstT += dt;
+                if(f.burstT > 2 && Rand(0,100)<2) { f.isBurst=true; f.burstT=Rand(1,2); Audio.noise(0.5); }
+            }
+
+            // Move away from rod
+            const dx = f.pos.x - this.rod.tip.x;
+            const dy = f.pos.y - this.rod.tip.y;
+            const ang = M.atan2(dy, dx);
+            
+            // Environmental modifiers
+            const wx = d.env.wind * M.sin(Date.now()*0.001);
+            const cx = d.env.current;
+            
+            f.pos.x += (M.cos(ang) + wx + cx) * moveSpd;
+            f.pos.y += (M.sin(ang) + 0.2) * moveSpd;
+            f.pos.x = Clamp(f.pos.x, 0, cw);
+            f.pos.y = Clamp(f.pos.y, ch*0.5, ch-20);
+        } else {
+            f.pos.x += (Rand(-1,1)); // Shake when stunned
+        }
+
+        this.hook.x = f.pos.x; this.hook.y = f.pos.y;
+
+        // Tension Logic
+        let dTen = 0;
+        if(Input.reel && !Input.ease) {
+            dTen += 30 * dt;
+            if(!isStunned) {
+                // Drag fish back
+                const pull = 50 * this.stats.reelPower;
+                const a = M.atan2(f.pos.y-this.rod.tip.y, f.pos.x-this.rod.tip.x);
+                f.pos.x -= M.cos(a)*pull*dt;
+                f.pos.y -= M.sin(a)*pull*dt;
+                f.stamina -= this.stats.rodDmg * dt;
+            } else {
+                // Bonus dmg on stun
+                f.stamina -= this.stats.rodDmg * 2 * dt;
+            }
+            Audio.sfxReel();
+        }
+
+        if(Input.ease) {
+            dTen -= CFG.tensionRecover * 3 * dt;
+            f.pos.y += 20 * dt; // Fish runs away faster
+        } else {
+            dTen -= CFG.tensionRecover * 0.5 * dt;
+        }
+
+        // Pump
+        if(this.pumpCD > 0) this.pumpCD -= dt;
+        if(Input.pump && !this.pumpCD) {
+            this.pumpCD = 1; dTen += 40; f.stamina -= this.stats.rodDmg * 4;
+            this.shake = 5; Particles.spawn(f.pos.x, f.pos.y, 0);
+        }
+
+        // Fish Pull
+        if(!isStunned) {
+            let fp = f.weight * 0.05 * (f.isBurst ? 2 : 1);
+            dTen += fp * dt;
+        }
+
+        if(isIronLine) {
+            this.rod.tension = M.min(this.rod.tension + dTen, 99); // Cap at 99
+        } else {
+            this.rod.tension += dTen;
+        }
+        
+        this.rod.tension = M.max(0, this.rod.tension);
+
+        // Check Break
+        if(this.rod.tension >= this.stats.maxTension) {
+            if(Rand(0,100)<10) this.breakLine(); // 10% chance per frame at max
+            this.shake = 3;
+        }
+
+        // Check Catch (Updated: Instant Catch)
+        if(f.stamina <= 0) {
+            this.catchSuccess();
+        }
+    }
+
+    breakLine() {
+        Audio.sfxBreak();
+        this.lives--;
+        this.fish.active = false;
+        this.state = State.IDLE;
+        if(this.lives <= 0) this.state = State.GAMEOVER;
+    }
+
+    catchSuccess() {
+        Audio.sfxWin();
+        const f = this.fish;
+        f.active = false;
+        
+        if(f.isBoss) {
+            this.state = State.VICTORY;
+        } else {
+            this.score += Math.floor(f.weight);
+            this.combo++;
+            this.bossProgress = M.min(100, this.bossProgress + 25); // 4 fish -> Boss
+            
+            // Random Upgrade
+            if(Rand(0,100)<40) {
+                this.genUpgrades();
+                this.state = State.UPGRADE;
+            } else {
+                this.state = State.REWARD;
+                setTimeout(()=>this.state=State.IDLE, 1500);
+            }
+        }
+    }
+
+    genUpgrades() {
+        const pool = [
+            {txt:"+Dây Bền", s:'maxTension', v:20},
+            {txt:"+Lực Kéo", s:'reelPower', v:0.2},
+            {txt:"+Sát Thương", s:'rodDmg', v:10}
+        ];
+        this.upgrades = pool.sort(()=>0.5-M.random()).slice(0,3);
+    }
+    applyUpg(i) {
+        const u = this.upgrades[i];
+        this.stats[u.s] += u.v;
+        this.state = State.IDLE;
+    }
+}
+const Game = new GameEngine();
+
+// --- RENDER ---
+const cvs = document.getElementById('gameCanvas');
+const ctx = cvs.getContext('2d');
+let cw, ch;
+function resize() { cw=cvs.width=window.innerWidth; ch=cvs.height=window.innerHeight; }
+window.onresize = resize; resize();
+
+// Click Logic
+// Đã chuyển vào Input.init()
+
+function handleClick(x, y) {
+    if(Game.state === State.MENU) {
+        // Render 5 stage buttons vertically
+        const btnH = 60, gap = 15;
+        const totalH = 5 * (btnH + gap);
+        const startY = (ch - totalH) / 2 + 50;
+        
+        for(let i=0; i<5; i++) {
+            const by = startY + i*(btnH+gap);
+            if(x > cw/2-150 && x < cw/2+150 && y > by && y < by+btnH) {
+                Game.startStage(i);
+            }
+        }
+    } else if(Game.state === State.UPGRADE) {
+        const cw3 = 140, gap = 20;
+        const sx = (cw - (3*cw3+2*gap))/2;
+        const sy = ch/2 - 100;
+        for(let i=0; i<3; i++) {
+            if(x > sx+i*(cw3+gap) && x < sx+i*(cw3+gap)+cw3 && y > sy && y < sy+200) Game.applyUpg(i);
+        }
+    } else if(Game.state === State.VICTORY || Game.state === State.GAMEOVER) {
+        Game.state = State.MENU;
+    }
+}
+
+function draw() {
+    // Determine Colors
+    const pal = Game.state === State.MENU ? STAGES[0].colors : Game.stageData.colors;
+    
+    // Sky
+    const g = ctx.createLinearGradient(0,0,0,ch);
+    g.addColorStop(0, pal.skyTop); g.addColorStop(0.4, pal.skyBot);
+    g.addColorStop(0.4, pal.waterTop); g.addColorStop(1, pal.waterBot);
+    ctx.fillStyle = g; ctx.fillRect(0,0,cw,ch);
+
+    // Shake
+    ctx.save();
+    if(Game.shake>0) ctx.translate(Rand(-Game.shake, Game.shake), Rand(-Game.shake, Game.shake));
+
+    // Scenery (Mountains)
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.moveTo(0,ch*0.4);
+    for(let i=0;i<=cw;i+=50) ctx.lineTo(i, ch*0.4 - 30 - M.sin(i*0.01 + Game.stageIdx)*50);
+    ctx.lineTo(cw,ch*0.4); ctx.fill();
+
+    // Rod & Player
+    if(Game.state !== State.MENU) {
+        const bx = cw*CFG.rodBase.x, by = ch*CFG.rodBase.y;
+        ctx.fillStyle='#222'; ctx.fillRect(bx-40, by, 80, 200); // Pier
+        ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(bx, by-60, 15, 0, M.PI*2); ctx.fill(); // Head
+        ctx.fillRect(bx-15, by-45, 30, 45); // Body
+        
+        // Rod Line
+        ctx.strokeStyle='#333'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(bx,by-30); ctx.lineTo(Game.rod.tip.x, Game.rod.tip.y); ctx.stroke();
+        
+        // Fishing Line
+        const tPct = Game.rod.tension/Game.stats.maxTension;
+        ctx.strokeStyle = tPct>0.8 ? '#f00' : (tPct>0.5 ? '#ff0' : '#fff');
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(Game.rod.tip.x, Game.rod.tip.y);
+        const mx = (Game.rod.tip.x+Game.hook.x)/2, my = (Game.rod.tip.y+Game.hook.y)/2;
+        const sag = Game.state===State.WAITING ? 50 : (Rand(-2,2)*tPct*10);
+        ctx.quadraticCurveTo(mx, my+sag, Game.hook.x, Game.hook.y);
+        ctx.stroke();
+
+        if(Game.state===State.WAITING || !Game.fish.active) {
+            ctx.fillStyle='red'; ctx.fillRect(Game.hook.x-3,Game.hook.y-3,6,6);
+        }
+    }
+
+    // Fish
+    if(Game.fish.active) {
+        const f = Game.fish;
+        ctx.save(); ctx.translate(f.pos.x, f.pos.y);
+        if(Game.skills[0].activeTimer > 0) ctx.rotate(Rand(-0.2, 0.2)); // Shake if stunned
+        ctx.scale(f.isBurst?1.1:1, 1);
+        
+        // Aura for boss
+        if(f.isBoss) { ctx.shadowBlur=20; ctx.shadowColor='red'; }
+        
+        ctx.fillStyle = f.isBoss ? '#800' : '#888';
+        ctx.beginPath(); ctx.ellipse(0,0, f.isBoss?50:20, f.isBoss?25:10, 0, 0, M.PI*2); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(15, -5, 5, 0, M.PI*2); ctx.fill(); // Eye
+        ctx.restore();
+
+        // Fish HP
+        const barW = 60;
+        ctx.fillStyle='#000'; ctx.fillRect(f.pos.x-barW/2, f.pos.y-50, barW, 6);
+        ctx.fillStyle='#0f0'; ctx.fillRect(f.pos.x-barW/2, f.pos.y-50, barW*(f.stamina/f.maxStamina), 6);
+    }
+
+    Particles.draw(ctx);
+    ctx.restore();
+
+    drawUI();
+}
+
+function drawUI() {
+    ctx.textAlign='center'; ctx.shadowBlur=4; ctx.shadowColor='black';
+
+    if(Game.state === State.MENU) {
+        ctx.fillStyle = 'white'; ctx.font='bold 40px monospace';
+        ctx.fillText("CÂU CÁ VẠN CÂN", cw/2, 80);
+        ctx.font='20px monospace'; ctx.fillText("Chọn Màn Chơi:", cw/2, 130);
+
+        const btnH = 60, gap = 15;
+        const startY = (ch - 5*(btnH+gap))/2 + 50;
+        
+        STAGES.forEach((s, i) => {
+            const by = startY + i*(btnH+gap);
+            // Draw Button
+            const bx = cw/2 - 150;
+            ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(bx, by, 300, btnH);
+            ctx.strokeStyle = 'white'; ctx.strokeRect(bx, by, 300, btnH);
+            
+            // Text
+            ctx.fillStyle = s.colors.skyTop; ctx.font='bold 18px monospace'; ctx.textAlign='left';
+            ctx.fillText(`${i+1}. ${s.name}`, bx + 20, by + 35);
+            ctx.fillStyle = '#aaa'; ctx.font='14px monospace'; ctx.textAlign='right';
+            ctx.fillText(`Boss: ${s.bossName}`, bx + 280, by + 35);
+        });
+        return;
+    }
+
+    // HUD
+    ctx.textAlign='left'; ctx.fillStyle='white'; ctx.font='18px monospace';
+    ctx.fillText(`${Game.stageData.name} - Điểm: ${Game.score}`, 20, 30);
+    ctx.fillText(`Mạng: ${"❤".repeat(Game.lives)}`, 20, 55);
+    
+    // Boss Summon Bar
+    ctx.fillStyle='rgba(255,255,255,0.2)'; ctx.fillRect(20, 70, 200, 10);
+    ctx.fillStyle='#f0f'; ctx.fillRect(20, 70, 200*(Game.bossProgress/100), 10);
+    ctx.font='12px monospace'; ctx.fillText(Game.bossSpawned ? "BOSS ĐANG TỚI!" : "Triệu Hồi Boss", 20, 65);
+
+    // Skill Icons (Desktop)
+    const drawSkill = (idx, x, y, key) => {
+        const s = Game.skills[idx];
+        const isActive = s.activeTimer > 0;
+        const onCd = s.curCd > 0;
+        
+        ctx.fillStyle = isActive ? 'white' : (onCd ? '#333' : s.color);
+        ctx.beginPath(); ctx.arc(x, y, 25, 0, M.PI*2); ctx.fill();
+        ctx.lineWidth=2; ctx.strokeStyle='white'; ctx.stroke();
+        
+        ctx.fillStyle = 'black'; ctx.textAlign='center'; ctx.font='bold 16px monospace';
+        ctx.fillText(onCd ? M.ceil(s.curCd) : key, x, y+5);
+        
+        // Cooldown overlay
+        if(onCd) {
+            ctx.fillStyle='rgba(0,0,0,0.5)';
+            ctx.beginPath(); ctx.moveTo(x,y); ctx.arc(x,y,25, -M.PI/2, -M.PI/2 + (M.PI*2)*(s.curCd/s.cd)); ctx.fill();
+        }
+    };
+    
+    // Adjusted coordinates to fit 3 skills
+    drawSkill(0, cw-130, ch-50, '1');
+    drawSkill(1, cw-80, ch-50, '2');
+    drawSkill(2, cw-30, ch-50, '3');
+
+    // Tension Bar
+    if(Game.state === State.FIGHTING) {
+        const bw=300, bh=20, bx=cw/2-bw/2, by=50;
+        ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(bx,by,bw,bh);
+        const tp = Game.rod.tension/Game.stats.maxTension;
+        const g=ctx.createLinearGradient(bx,0,bx+bw,0); g.addColorStop(0,'lime'); g.addColorStop(1,'red');
+        ctx.fillStyle=g; ctx.fillRect(bx,by,bw*tp,bh);
+        ctx.fillStyle='white'; ctx.textAlign='center'; ctx.fillText(tp>0.9?"ĐỨT!":"CĂNG DÂY", cw/2, by-5);
+    }
+
+    // Victory / Gameover
+    if(Game.state === State.VICTORY) {
+        ctx.fillStyle='rgba(0,0,0,0.85)'; ctx.fillRect(0,0,cw,ch);
+        ctx.fillStyle='#ff0'; ctx.font='bold 50px monospace'; ctx.textAlign='center';
+        ctx.fillText("MÀN CHƠI HOÀN THÀNH!", cw/2, ch/2-20);
+        ctx.fillStyle='white'; ctx.font='20px monospace';
+        ctx.fillText(`Bạn đã câu được ${Game.stageData.bossName}`, cw/2, ch/2+30);
+        ctx.fillText("Bấm để quay về Menu", cw/2, ch/2+80);
+    }
+    else if(Game.state === State.GAMEOVER) {
+        ctx.fillStyle='rgba(50,0,0,0.9)'; ctx.fillRect(0,0,cw,ch);
+        ctx.fillStyle='red'; ctx.font='bold 50px monospace'; ctx.textAlign='center';
+        ctx.fillText("THẤT BẠI", cw/2, ch/2);
+        ctx.fillStyle='white'; ctx.font='20px monospace';
+        ctx.fillText("Bấm để quay về Menu", cw/2, ch/2+60);
+    }
+    else if(Game.state === State.UPGRADE) {
+        ctx.fillStyle='rgba(0,0,0,0.9)'; ctx.fillRect(0,0,cw,ch);
+        ctx.fillStyle='gold'; ctx.textAlign='center'; ctx.font='30px monospace';
+        ctx.fillText("CHỌN NÂNG CẤP", cw/2, ch/2-150);
+        
+        const cw3=140, gap=20;
+        const sx = (cw-(3*cw3+2*gap))/2;
+        const sy = ch/2-100;
+        
+        Game.upgrades.forEach((u, i) => {
+            const x = sx + i*(cw3+gap);
+            ctx.strokeStyle='white'; ctx.strokeRect(x, sy, cw3, 200);
+            ctx.fillStyle='white'; ctx.font='16px monospace';
+            ctx.fillText(u.txt, x+cw3/2, sy+100);
+        });
+    }
+}
+
+// Loop
+let lastT = 0;
+function loop(t) {
+    const dt = Math.min((t - lastT)/1000, 0.1);
+    lastT = t;
+    Game.update(dt);
+    draw();
+    requestAnimationFrame(loop);
+}
+
+// Init
+Input.init();
+requestAnimationFrame(loop);
+
+})(); // End IIFE
+</script>
 </body>
-
 </html>
